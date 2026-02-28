@@ -25,7 +25,7 @@ The system allows users to:
 
 ### Frontend
 - **Framework**: Next.js 15 with TypeScript
-- **Styling**: TailwindCSS (assumed based on Next.js setup)
+- **Styling**: TailwindCSS 
 
 ## Critical Security Constraints
 - **DO NOT modify database schema** once established
