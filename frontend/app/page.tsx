@@ -262,13 +262,6 @@ export default function Dashboard() {
               <X size={18} />
             </button>
           </div>
-          <div className="mt-6 flex gap-2">
-            <div className={`h-1 flex-1 bg-violet-600/20 rounded-full overflow-hidden`}>
-              <div className={`h-full bg-violet-500 transition-all duration-1000 ${isProcessing ? 'w-full' : 'w-1/3'}`}></div>
-            </div>
-            <div className="h-1 flex-1 bg-white/5 rounded-full"></div>
-            <div className="h-1 flex-1 bg-white/5 rounded-full"></div>
-          </div>
         </div>
 
         {/* Chat Messages */}
@@ -288,6 +281,17 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+          {isProcessing && (
+            <div className="flex flex-col items-start">
+              <div className="flex items-center gap-2 mb-2 text-[10px] font-bold uppercase tracking-tighter text-violet-400">
+                <Sparkles size={10} />
+                AI Assistant
+              </div>
+              <div className="max-w-[90%] p-4 text-sm font-medium leading-relaxed rounded-2xl bg-violet-600/10 text-violet-100 border border-violet-500/20 rounded-tl-none shadow-[0_0_20px_rgba(139,92,246,0.05)] animate-pulse">
+                Thinking...
+              </div>
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
 
