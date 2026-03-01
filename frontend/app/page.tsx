@@ -6,58 +6,16 @@ import {
   Percent, FileText, Clock, CheckCircle, XCircle, AlertCircle,
   Edit2, Save, LogOut, BookMarked
 } from 'lucide-react';
-import type { Student, EducationDetails, Course, Application, ChatMessage } from './types';
-
-// Mock data - will be replaced with API calls later
-const mockStudent: Student = {
-  id: 1,
-  full_name: "Anant Sharma",
-  email: "anant@university.edu",
-  phone: "+91 98765 43210",
-  date_of_birth: "2002-05-15",
-  city: "Mumbai",
-  education: {
-    id: 1,
-    student_id: 1,
-    tenth_board: "CBSE",
-    tenth_percentage: 92.5,
-    twelfth_board: "CBSE",
-    twelfth_percentage: 88.3
-  }
-};
-
-const mockCourses: Course[] = [
-  { id: 1, title: "AI & Machine Learning", duration_months: 12, fee: 150000 },
-  { id: 2, title: "Full Stack Development", duration_months: 9, fee: 120000 },
-  { id: 3, title: "Data Science", duration_months: 10, fee: 130000 },
-  { id: 4, title: "Cloud Architecture", duration_months: 8, fee: 100000 },
-];
-
-const mockApplications: Application[] = [
-  { 
-    id: 1, 
-    student_id: 1, 
-    course_id: 1, 
-    status: 'accepted', 
-    applied_at: "2024-01-15T10:30:00", 
-    reviewed_at: "2024-01-20T14:00:00",
-    course: mockCourses[0]
-  },
-  { 
-    id: 2, 
-    student_id: 1, 
-    course_id: 2, 
-    status: 'under_review', 
-    applied_at: "2024-02-01T09:00:00", 
-    reviewed_at: null,
-    course: mockCourses[1]
-  },
-];
+import type { Student, Course, Application, ChatMessage } from './types';
+import { chatApi, courseApi, studentApi } from './lib/api';
 
 export default function Dashboard() {
-  const [student, setStudent] = useState<Student>(mockStudent);
-  const [courses, setCourses] = useState<Course[]>(mockCourses);
-  const [applications, setApplications] = useState<Application[]>(mockApplications);
+  const [student, setStudent] = useState<Student | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'profile' | 'education' | 'courses' | 'applications'>('profile');
@@ -65,8 +23,8 @@ export default function Dashboard() {
   // Edit states
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingEducation, setIsEditingEducation] = useState(false);
-  const [editedStudent, setEditedStudent] = useState<Student>(student);
-  const [editedEducation, setEditedEducation] = useState(student.education);
+  const [editedStudent, setEditedStudent] = useState<Student | null>(null);
+  const [editedEducation, setEditedEducation] = useState<Student['education']>(null);
 
   // AI Sidebar state
   const [isAiOpen, setIsAiOpen] = useState(false);
@@ -75,6 +33,7 @@ export default function Dashboard() {
   ]);
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -86,45 +45,142 @@ export default function Dashboard() {
     scrollToBottom();
   }, [messages]);
 
-  const handleChatSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const refreshDashboardData = async (authToken: string) => {
+    const [profile, courseList, applicationList] = await Promise.all([
+      studentApi.getProfile(authToken),
+      courseApi.list(),
+      studentApi.getApplications(authToken),
+    ]);
 
-    setMessages(prev => [...prev, { role: 'user', content: input }]);
+    setStudent(profile);
+    setEditedStudent(profile);
+    setEditedEducation(
+      profile.education ?? {
+        id: 0,
+        student_id: profile.id,
+        tenth_board: null,
+        tenth_percentage: null,
+        twelfth_board: null,
+        twelfth_percentage: null,
+      }
+    );
+    setCourses(courseList);
+    setApplications(applicationList);
+  };
+
+  useEffect(() => {
+    const existingToken = localStorage.getItem('token');
+    if (!existingToken) {
+      window.location.href = '/auth';
+      return;
+    }
+
+    setToken(existingToken);
+
+    const bootstrap = async () => {
+      try {
+        await refreshDashboardData(existingToken);
+      } catch (error) {
+        setPageError(error instanceof Error ? error.message : 'Failed to load dashboard');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    bootstrap();
+  }, []);
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || !token) return;
+
+    const userMessage = input;
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setInput("");
     setIsProcessing(true);
 
-    // Mock response - will connect to /chat endpoint later
-    setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        role: 'ai', 
-        content: "I understand you want to know about that. This will be connected to the backend AI agent soon!"
+    try {
+      const chatResponse = await chatApi.send(userMessage, token);
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        content: chatResponse.response,
       }]);
+
+      const isCommandLikeMessage = /\b(update|change|set|add|remove|delete|apply)\b/i.test(userMessage);
+      if (chatResponse.success && isCommandLikeMessage) {
+        await refreshDashboardData(token);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        content: error instanceof Error ? error.message : 'Chat request failed',
+      }]);
+    } finally {
       setIsProcessing(false);
-    }, 1000);
+    }
   };
 
-  const handleSaveProfile = () => {
-    setStudent(editedStudent);
-    setIsEditingProfile(false);
+  const handleSaveProfile = async () => {
+    if (!editedStudent || !token) return;
+    try {
+      const updatedStudent = await studentApi.updateProfile(
+        {
+          full_name: editedStudent.full_name,
+          phone: editedStudent.phone ?? undefined,
+          date_of_birth: editedStudent.date_of_birth ?? undefined,
+          city: editedStudent.city ?? undefined,
+        },
+        token
+      );
+
+      setStudent(updatedStudent);
+      setEditedStudent(updatedStudent);
+      setEditedEducation(updatedStudent.education);
+      setIsEditingProfile(false);
+      setActionMessage('Profile updated successfully.');
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : 'Failed to update profile.');
+    }
   };
 
-  const handleSaveEducation = () => {
-    setStudent(prev => ({ ...prev, education: editedEducation }));
-    setIsEditingEducation(false);
-  };
+  const handleSaveEducation = async () => {
+    if (!editedEducation || !student || !token) return;
 
-  const handleApply = (course: Course) => {
-    const newApplication: Application = {
-      id: Date.now(),
-      student_id: student.id,
-      course_id: course.id,
-      status: 'submitted',
-      applied_at: new Date().toISOString(),
-      reviewed_at: null,
-      course: course
+    const payload = {
+      tenth_board: editedEducation.tenth_board ?? undefined,
+      tenth_percentage: editedEducation.tenth_percentage ?? undefined,
+      twelfth_board: editedEducation.twelfth_board ?? undefined,
+      twelfth_percentage: editedEducation.twelfth_percentage ?? undefined,
     };
-    setApplications(prev => [...prev, newApplication]);
+
+    try {
+      let updatedEducation = null;
+      if (student.education) {
+        updatedEducation = await studentApi.updateEducation(payload, token);
+      } else {
+        updatedEducation = await studentApi.createEducation(payload, token);
+      }
+
+      const updatedStudent = { ...student, education: updatedEducation };
+      setStudent(updatedStudent);
+      setEditedEducation(updatedEducation);
+      setIsEditingEducation(false);
+      setActionMessage('Education details updated successfully.');
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : 'Failed to update education details.');
+    }
+  };
+
+  const handleApply = async (course: Course) => {
+    if (!token) return;
+    try {
+      await studentApi.applyForCourse(course.id, token);
+      const refreshedApplications = await studentApi.getApplications(token);
+      setApplications(refreshedApplications);
+      setActionMessage(`Applied for ${course.title}.`);
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : 'Failed to apply for course.');
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -155,6 +211,34 @@ export default function Dashboard() {
   const hasApplied = (courseId: number) => {
     return applications.some(app => app.course_id === courseId);
   };
+
+  if (loading) {
+    return (
+      <div className="h-screen bg-[#050505] text-slate-300 font-sans flex items-center justify-center">
+        <div className="text-sm tracking-wider uppercase text-slate-500">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  if (pageError || !student || !editedStudent) {
+    return (
+      <div className="h-screen bg-[#050505] text-slate-300 font-sans flex items-center justify-center px-6">
+        <div className="max-w-xl p-8 bg-white/[0.02] border border-white/10 rounded-2xl text-center">
+          <p className="text-red-400 mb-4">{pageError ?? 'Unable to load student profile.'}</p>
+          <button
+            onClick={() => {
+              localStorage.removeItem('token');
+              localStorage.removeItem('studentId');
+              window.location.href = '/auth';
+            }}
+            className="px-5 py-3 rounded-xl bg-violet-600 text-white hover:bg-violet-700 transition-colors"
+          >
+            Go to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-[#050505] text-slate-300 font-sans flex overflow-hidden relative">
@@ -250,6 +334,7 @@ export default function Dashboard() {
             <button 
               onClick={() => {
                 localStorage.removeItem('token');
+                localStorage.removeItem('studentId');
                 window.location.href = '/auth';
               }}
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-slate-500 hover:text-white hover:border-white/20 transition-all text-sm"
@@ -258,6 +343,12 @@ export default function Dashboard() {
               Sign Out
             </button>
           </div>
+
+          {actionMessage && (
+            <div className="mb-8 rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-sm text-violet-200">
+              {actionMessage}
+            </div>
+          )}
 
           {/* Navigation Tabs */}
           <div className="flex gap-2 mb-10 border-b border-white/5 pb-4">
@@ -314,7 +405,7 @@ export default function Dashboard() {
                       <input 
                         type="text"
                         value={editedStudent.full_name}
-                        onChange={(e) => setEditedStudent(prev => ({ ...prev, full_name: e.target.value }))}
+                        onChange={(e) => setEditedStudent({ ...editedStudent, full_name: e.target.value })}
                         className="w-full bg-black border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
@@ -340,7 +431,7 @@ export default function Dashboard() {
                       <input 
                         type="tel"
                         value={editedStudent.phone || ''}
-                        onChange={(e) => setEditedStudent(prev => ({ ...prev, phone: e.target.value }))}
+                        onChange={(e) => setEditedStudent({ ...editedStudent, phone: e.target.value })}
                         placeholder="+91 XXXXX XXXXX"
                         className="w-full bg-black border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500/50"
                       />
@@ -358,7 +449,7 @@ export default function Dashboard() {
                       <input 
                         type="date"
                         value={editedStudent.date_of_birth || ''}
-                        onChange={(e) => setEditedStudent(prev => ({ ...prev, date_of_birth: e.target.value }))}
+                        onChange={(e) => setEditedStudent({ ...editedStudent, date_of_birth: e.target.value })}
                         className="w-full bg-black border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500/50"
                       />
                     ) : (
@@ -375,7 +466,7 @@ export default function Dashboard() {
                       <input 
                         type="text"
                         value={editedStudent.city || ''}
-                        onChange={(e) => setEditedStudent(prev => ({ ...prev, city: e.target.value }))}
+                        onChange={(e) => setEditedStudent({ ...editedStudent, city: e.target.value })}
                         placeholder="Enter your city"
                         className="w-full bg-black border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-violet-500/50"
                       />
@@ -395,7 +486,23 @@ export default function Dashboard() {
                     <GraduationCap size={14}/> Education Details
                   </h2>
                   <button 
-                    onClick={() => isEditingEducation ? handleSaveEducation() : setIsEditingEducation(true)}
+                    onClick={() =>
+                      isEditingEducation
+                        ? handleSaveEducation()
+                        : (() => {
+                            if (!editedEducation && student) {
+                              setEditedEducation({
+                                id: 0,
+                                student_id: student.id,
+                                tenth_board: null,
+                                tenth_percentage: null,
+                                twelfth_board: null,
+                                twelfth_percentage: null,
+                              });
+                            }
+                            setIsEditingEducation(true);
+                          })()
+                    }
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                       isEditingEducation 
                         ? 'bg-violet-600 text-white hover:bg-violet-700'

@@ -1,6 +1,8 @@
 "use client";
 import React, { useState } from 'react';
-import { Lock, Mail, Cpu, ShieldCheck, ArrowRight, ArrowLeft, User, GraduationCap, Building, Percent } from 'lucide-react';
+import { Lock, Mail, Cpu, ShieldCheck, ArrowRight, ArrowLeft, User, Building, Percent } from 'lucide-react';
+import { authApi } from '../lib/api';
+import type { RegisterCredentials } from '../types';
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -19,7 +21,7 @@ export default function AuthPage() {
   const [twelfthBoard, setTwelfthBoard] = useState('');
   const [twelfthPercentage, setTwelfthPercentage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // For registration, go to step 2 first
@@ -31,13 +33,33 @@ export default function AuthPage() {
     setIsLoading(true);
     setError(null);
     
-    // For now, just simulate - will connect to backend later
-    setTimeout(() => {
-      // Store mock token for demo
-      localStorage.setItem('token', 'demo-token');
-      localStorage.setItem('studentId', '1');
+    try {
+      if (isLogin) {
+        const loginResult = await authApi.login({ email, password });
+        localStorage.setItem('token', loginResult.access_token);
+        localStorage.setItem('studentId', String(loginResult.student_id));
+      } else {
+        const registerPayload: RegisterCredentials = {
+          full_name: fullName,
+          email,
+          password,
+          tenth_board: tenthBoard || undefined,
+          tenth_percentage: tenthPercentage ? Number(tenthPercentage) : undefined,
+          twelfth_board: twelfthBoard || undefined,
+          twelfth_percentage: twelfthPercentage ? Number(twelfthPercentage) : undefined,
+        };
+
+        const registerResult = await authApi.register(registerPayload);
+        localStorage.setItem('token', registerResult.access_token);
+        localStorage.setItem('studentId', String(registerResult.student_id));
+      }
+
       window.location.href = "/";
-    }, 1500);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Authentication failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBack = () => {

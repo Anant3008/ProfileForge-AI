@@ -135,6 +135,96 @@ Keep it concise and helpful. Don't mention SQL or databases.
         message = self.llm.invoke(prompt)
         return message.content if hasattr(message, 'content') else str(message)
 
+    def _looks_like_profile_question(self, user_query: str) -> bool:
+        """
+        Detect if user is asking a conversational question about their own profile data.
+        This includes questions about education, personal info, or qualitative assessments.
+        """
+        query = user_query.lower().strip()
+        
+        # Question words indicating they want information about themselves
+        question_patterns = ["what", "tell me", "show me", "how", "do i", "am i", "is my", "are my"]
+        has_question_word = any(pattern in query for pattern in question_patterns)
+        
+        # Profile-related keywords
+        profile_keywords = [
+            "my", "profile", "education", "10th", "12th", "percentage", "marks", "score",
+            "phone", "email", "city", "name", "details", "info", "information",
+            "board", "cbse", "icse", "state", "good", "better", "strong", "weak"
+        ]
+        has_profile_keyword = any(keyword in query for keyword in profile_keywords)
+        
+        # Short questions that are likely profile-related (5 words or less)
+        is_short_question = len(query.split()) <= 5 and "?" in user_query
+        
+        return (has_question_word and has_profile_keyword) or is_short_question
+
+    def _conversational_profile_response(self, user_query: str, student_id: int, db: Session) -> str:
+        """
+        Answer conversational questions about the user's profile by fetching their complete
+        data and using the LLM to generate a natural, contextual response.
+        """
+        # Fetch complete student profile data
+        student_sql = f"""
+SELECT full_name, email, phone, date_of_birth, city, created_at
+FROM students
+WHERE id = {student_id}
+LIMIT 1;
+""".strip()
+        
+        education_sql = f"""
+SELECT tenth_board, tenth_percentage, twelfth_board, twelfth_percentage
+FROM education_details
+WHERE student_id = {student_id}
+LIMIT 1;
+""".strip()
+        
+        try:
+            student_data = self._execute_sql(student_sql, db)
+            education_data = self._execute_sql(education_sql, db)
+            
+            # Build context for LLM
+            context = "User's Profile Information:\n"
+            
+            if student_data:
+                student = student_data[0]
+                context += f"- Name: {student.get('full_name', 'Not set')}\n"
+                context += f"- Email: {student.get('email', 'Not set')}\n"
+                context += f"- Phone: {student.get('phone', 'Not set')}\n"
+                context += f"- Date of Birth: {student.get('date_of_birth', 'Not set')}\n"
+                context += f"- City: {student.get('city', 'Not set')}\n"
+            else:
+                context += "- Basic profile information not found\n"
+            
+            context += "\nEducation Details:\n"
+            if education_data:
+                edu = education_data[0]
+                context += f"- 10th Board: {edu.get('tenth_board', 'Not set')}\n"
+                context += f"- 10th Percentage: {edu.get('tenth_percentage', 'Not set')}%\n"
+                context += f"- 12th Board: {edu.get('twelfth_board', 'Not set')}\n"
+                context += f"- 12th Percentage: {edu.get('twelfth_percentage', 'Not set')}%\n"
+            else:
+                context += "- Education details not yet added\n"
+            
+            # Use LLM to generate conversational response
+            prompt = f"""
+You are a helpful academic profile assistant. The user has asked: "{user_query}"
+
+{context}
+
+Answer their question naturally and conversationally using the available data. Be friendly, supportive, and concise (2-3 sentences). If they ask about quality or assessment, provide honest, encouraging feedback based on the numbers. Don't mention technical terms like "database", "SQL", or "student_id".
+
+Your response:
+"""
+            
+            response = self.llm.invoke(prompt)
+            return response.content if hasattr(response, 'content') else str(response)
+            
+        except Exception as e:
+            return f"I had trouble fetching your profile data. Error: {str(e)}"
+
+
+
     def process_query(self, user_query: str, student_id: int, db: Session) -> Dict[str, Any]:
         """
         Process a natural language query from the student
@@ -148,6 +238,16 @@ Keep it concise and helpful. Don't mention SQL or databases.
             Dictionary with response and metadata
         """
         try:
+            # Special handling for conversational profile questions
+            if self._looks_like_profile_question(user_query):
+                response_text = self._conversational_profile_response(user_query, student_id, db)
+                return {
+                    "success": True,
+                    "response": response_text,
+                    "student_id": student_id,
+                    "query": user_query
+                }
+
             # Step 1: Generate SQL from natural language
             sql_prompt = self._inject_student_context(user_query, student_id)
             sql_response = self.llm.invoke(sql_prompt)
@@ -212,6 +312,8 @@ Available tables:
 
 User command: {user_command}
 
+IMPORTANT: If the user input contains obvious typos (e.g., "hderabad" → "Hyderabad", "bangalre" → "Bangalore"), intelligently correct them before generating SQL. Use your knowledge of common city names, board names, and other standard values.
+
 Generate ONLY the SQL UPDATE statement (no explanation, no markdown).
 Output ONLY the raw SQL, nothing else.
 """
@@ -260,10 +362,20 @@ Output ONLY the raw SQL, nothing else.
 The following SQL was executed successfully: {generated_sql}
 
 Write a brief, friendly confirmation message to the user about what was updated.
-Don't mention SQL. Just confirm the change naturally.
+Do not mention SQL, table names, column names, student IDs, numeric IDs, or internal system details.
+Address the user directly with "you" / "your".
+Just confirm the change naturally in one short sentence.
 """
             confirm_response = self.llm.invoke(confirm_prompt)
             response_text = confirm_response.content if hasattr(confirm_response, 'content') else str(confirm_response)
+
+            # Extra guard: strip internal identifier references if model includes them
+            response_text = re.sub(r"student\s*id\s*\d+", "your profile", response_text, flags=re.IGNORECASE)
+            response_text = re.sub(r"\bid\s*=\s*\d+\b", "", response_text, flags=re.IGNORECASE)
+            response_text = re.sub(r"\s{2,}", " ", response_text).strip()
+
+            if "student id" in response_text.lower() or "student_id" in response_text.lower():
+                response_text = "Your information has been updated successfully."
             
             return {
                 "success": True,

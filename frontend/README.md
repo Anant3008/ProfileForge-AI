@@ -1,5 +1,17 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment Variables
+
+Create a local env file before running the app:
+
+```bash
+cp .env.example .env.local
+```
+
+Required variable:
+
+- `NEXT_PUBLIC_API_BASE_URL` (example: `http://localhost:8000`)
+
 ## Getting Started
 
 First, run the development server:
