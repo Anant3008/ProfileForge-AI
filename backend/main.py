@@ -52,6 +52,11 @@ class StudentRegister(BaseModel):
     phone: Optional[str] = None
     date_of_birth: Optional[date] = None
     city: Optional[str] = None
+    # Education details (optional during registration)
+    tenth_board: Optional[str] = None
+    tenth_percentage: Optional[float] = None
+    twelfth_board: Optional[str] = None
+    twelfth_percentage: Optional[float] = None
 
 class StudentLogin(BaseModel):
     email: EmailStr
@@ -185,6 +190,19 @@ def register(student_data: StudentRegister, db: Session = Depends(get_db)):
     db.add(new_student)
     db.commit()
     db.refresh(new_student)
+    
+    # Create education details if any provided
+    if any([student_data.tenth_board, student_data.tenth_percentage, 
+            student_data.twelfth_board, student_data.twelfth_percentage]):
+        education = EducationDetails(
+            student_id=new_student.id,
+            tenth_board=student_data.tenth_board,
+            tenth_percentage=student_data.tenth_percentage,
+            twelfth_board=student_data.twelfth_board,
+            twelfth_percentage=student_data.twelfth_percentage
+        )
+        db.add(education)
+        db.commit()
     
     # Generate token
     access_token = create_access_token(data={"student_id": new_student.id})
