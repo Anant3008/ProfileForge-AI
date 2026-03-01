@@ -17,9 +17,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'profile' | 'education' | 'courses' | 'applications'>('profile');
-  
   // Edit states
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingEducation, setIsEditingEducation] = useState(false);
@@ -354,35 +351,10 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Navigation Tabs */}
-          <div className="flex gap-2 mb-10 border-b border-white/5 pb-4">
-            {[
-              { id: 'profile', label: 'Profile', icon: User },
-              { id: 'education', label: 'Education', icon: GraduationCap },
-              { id: 'courses', label: 'Courses', icon: BookMarked },
-              { id: 'applications', label: 'Applications', icon: FileText },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold tracking-wide transition-all ${
-                  activeTab === tab.id 
-                    ? 'bg-violet-600/20 text-violet-400 border border-violet-500/30' 
-                    : 'text-slate-500 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <tab.icon size={16} />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          <div className="space-y-8">
-            
-            {/* Profile Tab */}
-            {activeTab === 'profile' && (
-              <div className="space-y-6">
+          {/* Single-page sections */}
+          <div className="space-y-10">
+            {/* Profile */}
+            <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
                     <User size={14}/> Personal Information
@@ -480,11 +452,9 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* Education Tab */}
-            {activeTab === 'education' && (
-              <div className="space-y-6">
+            {/* Education */}
+            <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
                     <GraduationCap size={14}/> Education Details
@@ -611,11 +581,9 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* Courses Tab */}
-            {activeTab === 'courses' && (
-              <div className="space-y-6">
+            {/* Courses */}
+            <div className="space-y-6">
                 <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
                   <BookMarked size={14}/> Available Courses
                 </h2>
@@ -653,11 +621,9 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Applications Tab */}
-            {activeTab === 'applications' && (
-              <div className="space-y-6">
+            {/* Applications */}
+            <div className="space-y-6">
                 <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
                   <FileText size={14}/> My Applications
                 </h2>
@@ -691,7 +657,6 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-            )}
           </div>
         </div>
 
