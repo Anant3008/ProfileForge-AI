@@ -12,9 +12,9 @@ export interface RegisterCredentials {
   full_name: string;
   email: string;
   password: string;
-  phone?: string;
-  date_of_birth?: string;
-  city?: string;
+  phone: string;
+  date_of_birth: string;
+  city: string;
   // Education details (optional during registration)
   tenth_board?: string;
   tenth_percentage?: number;
@@ -95,4 +95,12 @@ export interface ChatRequest {
 export interface ChatResponse {
   response: string;
   success: boolean;
+}
+
+// AI Activity Log
+export interface AIActivityLog {
+  ts: string;
+  student_id: number;
+  kind: string;
+  [key: string]: unknown;
 }

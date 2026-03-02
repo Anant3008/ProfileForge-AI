@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { Lock, Mail, Cpu, ShieldCheck, ArrowRight, ArrowLeft, User, Building, Percent } from 'lucide-react';
+import { Lock, Mail, Cpu, ShieldCheck, ArrowRight, ArrowLeft, User, Building, Percent, Phone, Calendar, MapPin } from 'lucide-react';
 import { authApi } from '../lib/api';
 import type { RegisterCredentials } from '../types';
 
@@ -14,6 +14,9 @@ export default function AuthPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [city, setCity] = useState('');
   
   // Form fields - Education
   const [tenthBoard, setTenthBoard] = useState('');
@@ -43,6 +46,9 @@ export default function AuthPage() {
           full_name: fullName,
           email,
           password,
+          phone,
+          date_of_birth: dateOfBirth,
+          city,
           tenth_board: tenthBoard || undefined,
           tenth_percentage: tenthPercentage ? Number(tenthPercentage) : undefined,
           twelfth_board: twelfthBoard || undefined,
@@ -204,6 +210,65 @@ export default function AuthPage() {
                       />
                     </div>
                   </div>
+
+                  {/* Phone Input (Register only) */}
+                  {!isLogin && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Phone Number</label>
+                      <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-violet-400 transition-colors">
+                          <Phone size={18} />
+                        </div>
+                        <input 
+                          type="tel" 
+                          required={!isLogin}
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="+91 XXXXX XXXXX"
+                          className="w-full bg-black border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-violet-500/40 focus:ring-1 focus:ring-violet-500/20 transition-all placeholder:text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Date of Birth Input (Register only) */}
+                  {!isLogin && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Date of Birth</label>
+                      <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-violet-400 transition-colors">
+                          <Calendar size={18} />
+                        </div>
+                        <input 
+                          type="date" 
+                          required={!isLogin}
+                          value={dateOfBirth}
+                          onChange={(e) => setDateOfBirth(e.target.value)}
+                          className="w-full bg-black border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-violet-500/40 focus:ring-1 focus:ring-violet-500/20 transition-all placeholder:text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* City Input (Register only) */}
+                  {!isLogin && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">City</label>
+                      <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-violet-400 transition-colors">
+                          <MapPin size={18} />
+                        </div>
+                        <input 
+                          type="text" 
+                          required={!isLogin}
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="Mumbai"
+                          className="w-full bg-black border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-violet-500/40 focus:ring-1 focus:ring-violet-500/20 transition-all placeholder:text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 

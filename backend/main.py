@@ -7,13 +7,14 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
-from datetime import date
+from typing import Optional, List, Any
+import json
+from datetime import date, datetime, timezone
 import os
 from dotenv import load_dotenv
 
 # Import local modules
-from database import get_db, init_db
+from database import get_db, init_db, SessionLocal
 from models import Student, EducationDetails, Course, Application
 from auth import (
     get_password_hash,
@@ -21,7 +22,7 @@ from auth import (
     create_access_token,
     get_current_student_id
 )
-from agent import get_sql_agent
+from agent import get_sql_agent, LOG_PATH
 
 # Load environment variables
 load_dotenv()
@@ -49,9 +50,9 @@ class StudentRegister(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    phone: Optional[str] = None
-    date_of_birth: Optional[date] = None
-    city: Optional[str] = None
+    phone: str
+    date_of_birth: date
+    city: str
     # Education details (optional during registration)
     tenth_board: Optional[str] = None
     tenth_percentage: Optional[float] = None
@@ -116,10 +117,10 @@ class ApplicationResponse(BaseModel):
     student_id: int
     course_id: int
     status: str
-    applied_at: Optional[str]
-    reviewed_at: Optional[str]
+    applied_at: Optional[datetime]
+    reviewed_at: Optional[datetime]
     course: Optional[CourseResponse] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -131,6 +132,15 @@ class ChatResponse(BaseModel):
     success: bool
 
 
+class AIActivityLog(BaseModel):
+    ts: str
+    student_id: int
+    kind: str
+
+    class Config:
+        extra = "allow"
+
+
 # ============= Startup Event =============
 
 @app.on_event("startup")
@@ -138,6 +148,12 @@ async def startup_event():
     """Initialize database and agent on startup"""
     print("🚀 Starting ProfileForge AI Backend...")
     init_db()
+
+    # Seed starter courses if none exist
+    try:
+        seed_courses()
+    except Exception as e:
+        print(f"⚠️  Warning: Could not seed courses: {e}")
     
     # Warm up the SQL agent
     try:
@@ -160,6 +176,75 @@ def root():
         "service": "ProfileForge AI",
         "version": "1.0.0"
     }
+
+
+def seed_courses():
+    """Seed initial courses if none exist"""
+    session = SessionLocal()
+    try:
+        existing = session.query(Course).count()
+        if existing > 0:
+            return
+
+        demo_courses = [
+            {"title": "Full-Stack Web Development", "duration_months": 6, "fee": 45000},
+            {"title": "Data Science & ML Foundations", "duration_months": 5, "fee": 52000},
+            {"title": "Cloud & DevOps Essentials", "duration_months": 4, "fee": 48000},
+            {"title": "Cybersecurity Fundamentals", "duration_months": 4, "fee": 41000},
+            {"title": "Mobile App Development (Flutter)", "duration_months": 5, "fee": 47000},
+        ]
+
+        for course in demo_courses:
+            session.add(Course(**course))
+
+        session.commit()
+        print(f"📚 Seeded {len(demo_courses)} demo courses")
+    finally:
+        session.close()
+
+
+# ============= AI Activity Logs =============
+
+
+@app.get("/ai/logs", response_model=List[AIActivityLog])
+def get_ai_logs(
+    limit: int = 50,
+    student_id: int = Depends(get_current_student_id),
+):
+    """Return recent AI activity logs for the authenticated student."""
+    if limit <= 0:
+        limit = 1
+    if limit > 200:
+        limit = 200
+
+    if not os.path.exists(LOG_PATH):
+        return []
+
+    entries: List[AIActivityLog] = []
+    try:
+        with open(LOG_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        for line in reversed(lines):
+            try:
+                event = json.loads(line)
+            except Exception:
+                continue
+
+            if event.get("student_id") != student_id:
+                continue
+
+            entries.append(event)
+            if len(entries) >= limit:
+                break
+
+        entries.reverse()
+        return entries
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to read AI activity logs: {str(e)}"
+        )
 
 
 # ============= Authentication Endpoints =============
@@ -417,11 +502,12 @@ def apply_for_course(
             detail="Already applied for this course"
         )
     
-    # Create application
+    # Auto-accept enrollment
     application = Application(
         student_id=student_id,
         course_id=course_id,
-        status="submitted"
+        status="accepted",
+        reviewed_at=datetime.now(timezone.utc)
     )
     db.add(application)
     db.commit()

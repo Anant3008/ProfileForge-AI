@@ -11,6 +11,8 @@ CRITICAL SECURITY: All queries are automatically scoped to the authenticated stu
 """
 import os
 import re
+import json
+from datetime import datetime
 from typing import Any, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -18,6 +20,28 @@ from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_google_genai import ChatGoogleGenerativeAI
 from database import engine
+
+
+# Lightweight JSONL activity logging (file-based, no database)
+LOG_DIR = os.getenv("AI_LOG_DIR", "logs")
+LOG_PATH = os.path.join(LOG_DIR, "ai_activity.jsonl")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+
+def log_ai_event(student_id: int, kind: str, payload: Dict[str, Any]) -> None:
+    event = {
+        "ts": datetime.utcnow().isoformat() + "Z",
+        "student_id": student_id,
+        "kind": kind,
+        **payload,
+    }
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            json.dump(event, f)
+            f.write("\n")
+    except Exception:
+        # Intentionally swallow logging errors to avoid breaking main flow
+        pass
 
 
 class SafetyConfig:
@@ -150,7 +174,8 @@ Keep it concise and helpful. Don't mention SQL or databases.
         profile_keywords = [
             "my", "profile", "education", "10th", "12th", "percentage", "marks", "score",
             "phone", "email", "city", "name", "details", "info", "information",
-            "board", "cbse", "icse", "state", "good", "better", "strong", "weak"
+            "board", "cbse", "icse", "state", "good", "better", "strong", "weak",
+            "course", "courses", "enrolled", "enrol", "applied", "application"
         ]
         has_profile_keyword = any(keyword in query for keyword in profile_keywords)
         
@@ -179,9 +204,18 @@ WHERE student_id = {student_id}
 LIMIT 1;
 """.strip()
         
+        courses_sql = f"""
+SELECT c.title, c.duration_months, c.fee, a.status, a.applied_at, a.reviewed_at
+FROM applications a
+JOIN courses c ON a.course_id = c.id
+WHERE a.student_id = {student_id}
+ORDER BY a.applied_at DESC;
+""".strip()
+
         try:
             student_data = self._execute_sql(student_sql, db)
             education_data = self._execute_sql(education_sql, db)
+            courses_data = self._execute_sql(courses_sql, db)
             
             # Build context for LLM
             context = "User's Profile Information:\n"
@@ -206,6 +240,26 @@ LIMIT 1;
             else:
                 context += "- Education details not yet added\n"
             
+            context += "\nEnrolled Courses:\n"
+            if courses_data:
+                for course in courses_data:
+                    title = course.get("title", "Unknown course")
+                    duration = course.get("duration_months")
+                    fee = course.get("fee")
+                    status = course.get("status", "unknown")
+                    enrolled_on = course.get("applied_at")
+                    context += "- "
+                    context += f"{title} | Status: {status}"
+                    if duration is not None:
+                        context += f" | Duration: {duration} months"
+                    if fee is not None:
+                        context += f" | Fee: ₹{fee}"
+                    if enrolled_on is not None:
+                        context += f" | Enrolled on: {enrolled_on}"
+                    context += "\n"
+            else:
+                context += "- No courses enrolled yet\n"
+
             # Use LLM to generate conversational response
             prompt = f"""
 You are a helpful academic profile assistant. The user has asked: "{user_query}"
@@ -241,6 +295,10 @@ Your response:
             # Special handling for conversational profile questions
             if self._looks_like_profile_question(user_query):
                 response_text = self._conversational_profile_response(user_query, student_id, db)
+                log_ai_event(student_id, "conversational_profile", {
+                    "query": user_query,
+                    "response": response_text,
+                })
                 return {
                     "success": True,
                     "response": response_text,
@@ -271,6 +329,13 @@ Your response:
             
             # Step 4: Format results into natural language
             response_text = self._format_results(user_query, results, student_id)
+
+            log_ai_event(student_id, "query", {
+                "query": user_query,
+                "generated_sql": generated_sql,
+                "rows": len(results),
+                "response": response_text,
+            })
             
             return {
                 "success": True,
@@ -280,6 +345,10 @@ Your response:
             }
             
         except Exception as e:
+            log_ai_event(student_id, "query_error", {
+                "query": user_query,
+                "error": str(e),
+            })
             return {
                 "success": False,
                 "response": f"Error processing query: {str(e)}",
@@ -376,6 +445,12 @@ Just confirm the change naturally in one short sentence.
 
             if "student id" in response_text.lower() or "student_id" in response_text.lower():
                 response_text = "Your information has been updated successfully."
+
+            log_ai_event(student_id, "command", {
+                "command": user_command,
+                "generated_sql": generated_sql,
+                "response": response_text,
+            })
             
             return {
                 "success": True,
@@ -386,6 +461,10 @@ Just confirm the change naturally in one short sentence.
             
         except Exception as e:
             db.rollback()
+            log_ai_event(student_id, "command_error", {
+                "command": user_command,
+                "error": str(e),
+            })
             return {
                 "success": False,
                 "response": f"Error executing command: {str(e)}",

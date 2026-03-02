@@ -1,18 +1,20 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   User, Send, Award, BookOpen, GraduationCap, Sparkles, BrainCircuit, 
   Hash, Terminal, Cpu, X, Phone, MapPin, Calendar, Building, 
-  Percent, FileText, Clock, CheckCircle, XCircle, AlertCircle,
-  Edit2, Save, LogOut, BookMarked
+  Percent, FileText, Clock, Edit2, Save, LogOut, BookMarked
 } from 'lucide-react';
-import type { Student, Course, Application, ChatMessage } from './types';
+import type { Student, Course, Application, ChatMessage, AIActivityLog } from './types';
 import { chatApi, courseApi, studentApi } from './lib/api';
 
 export default function Dashboard() {
+  const router = useRouter();
   const [student, setStudent] = useState<Student | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [aiLogs, setAiLogs] = useState<AIActivityLog[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -43,10 +45,11 @@ export default function Dashboard() {
   }, [messages]);
 
   const refreshDashboardData = async (authToken: string) => {
-    const [profile, courseList, applicationList] = await Promise.all([
+    const [profile, courseList, applicationList, logEntries] = await Promise.all([
       studentApi.getProfile(authToken),
       courseApi.list(),
       studentApi.getApplications(authToken),
+      studentApi.getAiLogs(authToken, 50),
     ]);
 
     setStudent(profile);
@@ -63,12 +66,14 @@ export default function Dashboard() {
     );
     setCourses(courseList);
     setApplications(applicationList);
+    setAiLogs(logEntries);
   };
 
   useEffect(() => {
     const existingToken = localStorage.getItem('token');
     if (!existingToken) {
-      window.location.href = '/auth';
+      router.replace('/auth');
+      setLoading(false);
       return;
     }
 
@@ -85,11 +90,17 @@ export default function Dashboard() {
     };
 
     bootstrap();
-  }, []);
+  }, [router]);
+
+  const handleSignOut = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('studentId');
+    router.replace('/auth');
+  };
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !token) return;
+    if (isProcessing || !input.trim() || !token) return;
 
     const userMessage = input;
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
@@ -180,24 +191,6 @@ export default function Dashboard() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'accepted': return <CheckCircle className="text-emerald-500" size={16} />;
-      case 'rejected': return <XCircle className="text-red-500" size={16} />;
-      case 'under_review': return <AlertCircle className="text-yellow-500" size={16} />;
-      default: return <Clock className="text-slate-500" size={16} />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'accepted': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-      case 'rejected': return 'text-red-400 bg-red-500/10 border-red-500/20';
-      case 'under_review': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
-      default: return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
-    }
-  };
-
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'N/A';
     return new Date(dateStr).toLocaleDateString('en-IN', { 
@@ -205,9 +198,30 @@ export default function Dashboard() {
     });
   };
 
-  const hasApplied = (courseId: number) => {
-    return applications.some(app => app.course_id === courseId);
+  const formatTimestamp = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
   };
+
+  const summarizeLog = (log: AIActivityLog) => {
+    if (typeof log.query === 'string') return log.query;
+    if (typeof log.command === 'string') return log.command;
+    if (typeof log.response === 'string') return log.response;
+    if (typeof log.error === 'string') return log.error;
+    return 'Activity recorded';
+  };
+
+  const appliedCourseIds = new Set(
+    applications
+      .map((app) => app.course_id ?? app.course?.id)
+      .filter((id): id is number => Boolean(id))
+  );
+
+  const hasApplied = (courseId: number) => appliedCourseIds.has(courseId);
+
+  const availableCourses = courses.filter((course) => !hasApplied(course.id));
 
   if (loading) {
     return (
@@ -223,11 +237,7 @@ export default function Dashboard() {
         <div className="max-w-xl p-8 bg-white/[0.02] border border-white/10 rounded-2xl text-center">
           <p className="text-red-400 mb-4">{pageError ?? 'Unable to load student profile.'}</p>
           <button
-            onClick={() => {
-              localStorage.removeItem('token');
-              localStorage.removeItem('studentId');
-              window.location.href = '/auth';
-            }}
+            onClick={handleSignOut}
             className="px-5 py-3 rounded-xl bg-violet-600 text-white hover:bg-violet-700 transition-colors"
           >
             Go to Sign In
@@ -300,9 +310,14 @@ export default function Dashboard() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about your profile or request updates..."
-              className="w-full bg-black/40 border border-white/10 rounded-xl py-4 pl-5 pr-12 text-sm text-white focus:outline-none focus:border-violet-500/50 transition-all"
+              disabled={isProcessing}
+              className={`w-full bg-black/40 border border-white/10 rounded-xl py-4 pl-5 pr-12 text-sm text-white focus:outline-none focus:border-violet-500/50 transition-all ${isProcessing ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
-            <button type="submit" className="absolute right-2 top-2 p-2 text-violet-400 hover:text-white transition-colors">
+            <button
+              type="submit"
+              disabled={isProcessing}
+              className={`absolute right-2 top-2 p-2 text-violet-400 transition-colors ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}
+            >
               <Send size={20} />
             </button>
           </form>
@@ -333,11 +348,7 @@ export default function Dashboard() {
               <p className="text-slate-500 text-lg font-light">{student.email}</p>
             </div>
             <button 
-              onClick={() => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('studentId');
-                window.location.href = '/auth';
-              }}
+              onClick={handleSignOut}
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-slate-500 hover:text-white hover:border-white/20 transition-all text-sm"
             >
               <LogOut size={16} />
@@ -582,76 +593,124 @@ export default function Dashboard() {
                 </div>
               </div>
 
-            {/* Courses */}
+            {/* My Courses (enrolled) */}
+            <div className="space-y-6">
+              <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
+                <FileText size={14}/> My Courses
+              </h2>
+
+              {applications.length === 0 ? (
+                <div className="p-12 bg-white/[0.02] border border-white/5 rounded-2xl text-center">
+                  <FileText className="mx-auto text-slate-600 mb-4" size={48} />
+                  <p className="text-slate-500">You have no enrolled courses yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {applications.map(app => (
+                    <div key={app.id} className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-6">
+                        <div className="w-12 h-12 rounded-xl bg-violet-600/20 flex items-center justify-center">
+                          <BookOpen className="text-violet-400" size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-white">{app.course?.title}</h3>
+                          <p className="text-sm text-slate-500">Enrolled on {formatDate(app.applied_at)}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm text-slate-400">
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} />
+                          <span>Duration</span>
+                          <span className="text-white font-medium">
+                            {app.course?.duration_months ? `${app.course.duration_months} months` : 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Award size={14} />
+                          <span>Fee</span>
+                          <span className="text-white font-medium">
+                            {typeof app.course?.fee === 'number' ? `₹${app.course.fee.toLocaleString()}` : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* AI Activity Logs */}
+            <div className="space-y-6">
+              <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
+                <Terminal size={14}/> AI Activity
+              </h2>
+
+              {aiLogs.length === 0 ? (
+                <div className="p-12 bg-white/[0.02] border border-white/5 rounded-2xl text-center">
+                  <Terminal className="mx-auto text-slate-600 mb-4" size={48} />
+                  <p className="text-slate-500">No AI activity logged yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {aiLogs.map((log, idx) => (
+                    <div key={`${log.ts}-${idx}`} className="p-4 bg-white/[0.02] border border-white/5 rounded-xl flex items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 text-xs text-slate-500 uppercase tracking-[0.15em]">
+                          <span className="px-3 py-1 rounded-full bg-white/5 text-white/80 border border-white/10 font-bold">{log.kind}</span>
+                          <span>{formatTimestamp(log.ts)}</span>
+                        </div>
+                        <p className="text-sm text-slate-300 leading-relaxed line-clamp-2">
+                          {summarizeLog(log)}
+                        </p>
+                      </div>
+                      <div className="text-[10px] text-slate-600 font-mono bg-black/30 border border-white/5 rounded-lg px-3 py-2 max-w-xs break-words">
+                        {log.query && <div className="mb-1"><span className="text-slate-500">Q:</span> <span>{String(log.query)}</span></div>}
+                        {log.command && <div className="mb-1"><span className="text-slate-500">CMD:</span> <span>{String(log.command)}</span></div>}
+                        {log.response && <div className="mb-1"><span className="text-slate-500">RES:</span> <span>{String(log.response)}</span></div>}
+                        {log.error && <div className="text-red-400"><span className="text-slate-500">ERR:</span> <span>{String(log.error)}</span></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Available Courses */}
             <div className="space-y-6">
                 <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
                   <BookMarked size={14}/> Available Courses
                 </h2>
                 
-                <div className="grid grid-cols-2 gap-6">
-                  {courses.map(course => (
-                    <div key={course.id} className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl hover:border-violet-500/20 transition-all">
-                      <h3 className="text-xl font-bold text-white mb-4">{course.title}</h3>
-                      <div className="space-y-3 mb-6">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-500 flex items-center gap-2">
-                            <Clock size={14}/> Duration
-                          </span>
-                          <span className="text-white font-medium">{course.duration_months} months</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-500 flex items-center gap-2">
-                            <Award size={14}/> Fee
-                          </span>
-                          <span className="text-white font-medium">₹{course.fee?.toLocaleString()}</span>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => !hasApplied(course.id) && handleApply(course)}
-                        disabled={hasApplied(course.id)}
-                        className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
-                          hasApplied(course.id)
-                            ? 'bg-white/5 text-slate-500 cursor-not-allowed'
-                            : 'bg-violet-600 text-white hover:bg-violet-700'
-                        }`}
-                      >
-                        {hasApplied(course.id) ? 'Already Applied' : 'Apply Now'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            {/* Applications */}
-            <div className="space-y-6">
-                <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-3">
-                  <FileText size={14}/> My Applications
-                </h2>
-                
-                {applications.length === 0 ? (
+                {availableCourses.length === 0 ? (
                   <div className="p-12 bg-white/[0.02] border border-white/5 rounded-2xl text-center">
-                    <FileText className="mx-auto text-slate-600 mb-4" size={48} />
-                    <p className="text-slate-500">No applications yet. Apply for a course to get started!</p>
+                    <BookMarked className="mx-auto text-slate-600 mb-4" size={48} />
+                    <p className="text-slate-500">All courses are already in your list.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {applications.map(app => (
-                      <div key={app.id} className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                          <div className="w-12 h-12 rounded-xl bg-violet-600/20 flex items-center justify-center">
-                            <BookOpen className="text-violet-400" size={24} />
+                  <div className="grid grid-cols-2 gap-6">
+                    {availableCourses.map(course => (
+                      <div key={course.id} className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl hover:border-violet-500/20 transition-all">
+                        <h3 className="text-xl font-bold text-white mb-4">{course.title}</h3>
+                        <div className="space-y-3 mb-6">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-500 flex items-center gap-2">
+                              <Clock size={14}/> Duration
+                            </span>
+                            <span className="text-white font-medium">{course.duration_months} months</span>
                           </div>
-                          <div>
-                            <h3 className="text-lg font-bold text-white">{app.course?.title}</h3>
-                            <p className="text-sm text-slate-500">Applied on {formatDate(app.applied_at)}</p>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-500 flex items-center gap-2">
+                              <Award size={14}/> Fee
+                            </span>
+                            <span className="text-white font-medium">₹{course.fee?.toLocaleString()}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <span className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border ${getStatusColor(app.status)}`}>
-                            {getStatusIcon(app.status)}
-                            {app.status.replace('_', ' ').toUpperCase()}
-                          </span>
-                        </div>
+                        <button 
+                          onClick={() => handleApply(course)}
+                          className="w-full py-3 rounded-xl font-bold text-sm transition-all bg-violet-600 text-white hover:bg-violet-700"
+                        >
+                          Enroll Now
+                        </button>
                       </div>
                     ))}
                   </div>
