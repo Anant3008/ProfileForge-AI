@@ -1,4 +1,4 @@
-# 🎓 ProfileForge AI
+# ProfileForge AI
 
 > AI-powered academic profile management system with natural language interface
 
@@ -10,31 +10,31 @@
 
 ProfileForge AI is a modern student profile management system that combines traditional CRUD operations with AI-powered natural language processing. Students can manage their academic profiles either through a conventional UI or by simply chatting with an AI agent.
 
-## 🚀 Live Demo & Design
+## Live Demo & Design
 
-**🌐 Live Application**: [https://profile-forge-ai.vercel.app/](https://profile-forge-ai.vercel.app/)  
-**🎨 Figma Design**: [View Design System](https://www.figma.com/design/zF1od35xf71U7nZolODhcl/ProfileForge-AI?node-id=0-1&t=vIMJSpvnNw5CozvR-1)
+**Live Application**: [https://profile-forge-ai.vercel.app/](https://profile-forge-ai.vercel.app/)  
+**Figma Design**: [View Design System](https://www.figma.com/design/zF1od35xf71U7nZolODhcl/ProfileForge-AI?node-id=0-1&t=vIMJSpvnNw5CozvR-1)
 
 > Try it now! Register a new account and explore the AI-powered profile management system.
 
 ---
 
-## ✨ Features
+## Features
 
-### 🎯 Core Functionality
+### Core Functionality
 - **Dual Interface**: Traditional forms + AI chat for profile management
 - **Smart Profile Management**: Update academic info, education, skills via UI or natural language
 - **Course Enrollment**: Browse and enroll in available courses
 - **AI Activity Logging**: Track all AI interactions with detailed audit logs
 - **Secure Authentication**: JWT-based auth with bcrypt password hashing
 
-### 🤖 AI Capabilities
+### AI Capabilities
 - **Natural Language Queries**: "What's my GPA?" → Instant answers
 - **Conversational Updates**: "Set my major to Computer Science" → Profile updated
 - **Contextual Understanding**: AI understands student context and provides relevant responses
 - **SQL Safety**: Built-in guards prevent destructive operations
 
-### 🎨 User Experience
+### User Experience
 - **Futuristic Dark Theme**: Sleek violet/blue gradient design with glowing effects
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
 - **Real-time Updates**: Instant feedback on all operations
@@ -42,7 +42,7 @@ ProfileForge AI is a modern student profile management system that combines trad
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -89,7 +89,7 @@ ProfileForge AI is a modern student profile management system that combines trad
 
 ---
 
-## 🛠️ Tech Stack & Design Decisions
+## Tech Stack & Design Decisions
 
 ### Frontend: **Next.js 16 + React + TypeScript**
 
@@ -254,7 +254,7 @@ ProfileForge AI is a modern student profile management system that combines trad
 ---
 
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - **Node.js** 18+ (for frontend)
@@ -320,16 +320,16 @@ Frontend will be available at: http://localhost:3000
 
 ---
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 ProfileForge-AI/
 ├── backend/                    # FastAPI backend
-│   ├── main.py                # 🚪 API endpoints & app entry
-│   ├── agent.py               # 🧠 AI agent with LangChain
-│   ├── models.py              # 🗄️ SQLAlchemy models
-│   ├── database.py            # 💾 Database connection
-│   ├── auth.py                # 🔐 JWT authentication
+│   ├── main.py                # API endpoints & app entry
+│   ├── agent.py               # AI agent with LangChain
+│   ├── models.py              # SQLAlchemy models
+│   ├── database.py            # Database connection
+│   ├── auth.py                # JWT authentication
 │   ├── pyproject.toml         # Python dependencies
 │   ├── .env                   # Environment variables (gitignored)
 │   └── data/                  # SQLite database + logs
@@ -338,11 +338,11 @@ ProfileForge-AI/
 │
 ├── frontend/                   # Next.js frontend
 │   ├── app/                   # Next.js app directory
-│   │   ├── page.tsx           # 🏠 Main dashboard (protected)
+│   │   ├── page.tsx           # Main dashboard (protected)
 │   │   ├── auth/              # Authentication pages
 │   │   │   └── page.tsx       # Login/Register forms
 │   │   ├── lib/               # Utilities
-│   │   │   └── api.ts         # 🌐 API client functions
+│   │   │   └── api.ts         # API client functions
 │   │   ├── types.ts           # TypeScript interfaces
 │   │   ├── layout.tsx         # Root layout
 │   │   └── globals.css        # Global styles (Tailwind)
@@ -357,7 +357,7 @@ ProfileForge-AI/
 ---
 
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please follow these steps:
 
@@ -375,7 +375,7 @@ Contributions are welcome! Please follow these steps:
 
 ---
 
-## 📝 Future Enhancements
+## Future Enhancements
 
 ### Planned Features
 - [ ] **Multi-language Support**: i18n for global users
@@ -398,7 +398,7 @@ Contributions are welcome! Please follow these steps:
 
 
 
-## 📚 Resources
+## Resources
 
 ### Documentation
 - [FastAPI Docs](https://fastapi.tiangolo.com/)
@@ -415,8 +415,8 @@ Contributions are welcome! Please follow these steps:
 
 <div align="center">
 
-**⭐ Star this repo if you find it useful!**
+**Star this repo if you find it useful!**
 
-Made with ❤️ and ☕ by Anant
+Made by Anant
 
 </div>
