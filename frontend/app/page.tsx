@@ -664,10 +664,10 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <div className="text-[10px] text-slate-600 font-mono bg-black/30 border border-white/5 rounded-lg px-3 py-2 max-w-xs break-words">
-                        {log.query && <div className="mb-1"><span className="text-slate-500">Q:</span> <span>{String(log.query)}</span></div>}
-                        {log.command && <div className="mb-1"><span className="text-slate-500">CMD:</span> <span>{String(log.command)}</span></div>}
-                        {log.response && <div className="mb-1"><span className="text-slate-500">RES:</span> <span>{String(log.response)}</span></div>}
-                        {log.error && <div className="text-red-400"><span className="text-slate-500">ERR:</span> <span>{String(log.error)}</span></div>}
+                        {log.query !== undefined && <div className="mb-1"><span className="text-slate-500">Q:</span> <span>{String(log.query)}</span></div>}
+                        {log.command !== undefined && <div className="mb-1"><span className="text-slate-500">CMD:</span> <span>{String(log.command)}</span></div>}
+                        {log.response !== undefined && <div className="mb-1"><span className="text-slate-500">RES:</span> <span>{String(log.response)}</span></div>}
+                        {log.error !== undefined && <div className="text-red-400"><span className="text-slate-500">ERR:</span> <span>{String(log.error)}</span></div>}
                       </div>
                     </div>
                   ))}
